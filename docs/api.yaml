@@ -1,0 +1,251 @@
+openapi: 3.0.0
+info:
+  title: GalerkaAuthPlugin REST API
+  version: 1.0.0
+  description: |
+    REST API Minecraft-плагина GalerkaAuthPlugin для взаимодействия с микросервисами авторизации.
+    
+    ## Общая информация
+    
+    API работает в отдельном потоке на игровом сервере и принимает обратные вызовы
+    от внешних сервисов (например, AuthBot) после действий пользователя.
+    
+    ### Сценарий двухфакторной аутентификации
+    
+    1. Игрок вводит `/login <пароль>` на сервере.
+    2. Плагин отправляет `POST /api/v1/2fa/` в AuthBot с `userId` (Telegram ID) и `nickname`.
+    3. Игрок подтверждает или отклоняет вход в Telegram-боте.
+    4. AuthBot вызывает `POST /api/v1/2fa/confirm/` на REST API плагина.
+    5. Плагин расфризит игрока (при `approved`) или оставляет его в ожидании нового входа (при `denied`).
+    
+    > ⚠️ **Важно:** API не является публичным. Порт должен быть доступен только доверенным
+    > микросервисам внутри сети. Используйте заголовок `X-Api-Key` для аутентификации.
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: Локальный сервер (значение по умолчанию из config.yml)
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /api/v1/health/:
+    get:
+      summary: Проверка работоспособности
+      description: Эндпоинт для проверки, что REST API плагина запущен и отвечает.
+      security: []
+      responses:
+        '200':
+          description: Сервис работает нормально
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/2fa/confirm/:
+    post:
+      summary: Callback подтверждения 2FA
+      description: |
+        Вызывается микросервисом AuthBot после того, как пользователь подтвердил
+        или отклонил вход в Telegram-боте.
+        
+        При `status: approved` плагин завершает авторизацию и снимает ограничения с игрока.
+        При `status: denied` ожидание 2FA сбрасывается, игрок остаётся замороженным.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorConfirmRequest'
+            examples:
+              approved:
+                summary: Подтверждение входа
+                value:
+                  userId: "123456789"
+                  nickname: "Steve"
+                  status: approved
+              denied:
+                summary: Отклонение входа
+                value:
+                  userId: "123456789"
+                  nickname: "Steve"
+                  status: denied
+      responses:
+        '200':
+          description: Запрос обработан
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TwoFactorConfirmedResponse'
+                  - $ref: '#/components/schemas/TwoFactorRejectedResponse'
+              examples:
+                confirmed:
+                  summary: Вход подтверждён
+                  value:
+                    status: confirmed
+                    nickname: Steve
+                    online: true
+                rejected:
+                  summary: Вход отклонён
+                  value:
+                    status: rejected
+                    nickname: Steve
+        '400':
+          description: Некорректные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingField:
+                  value:
+                    error: bad_request
+                    message: "Missing required field: userId"
+                invalidStatus:
+                  value:
+                    error: bad_request
+                    message: "Invalid status. Allowed values: approved, denied"
+                nicknameMismatch:
+                  value:
+                    error: bad_request
+                    message: "Nickname does not match linked account"
+        '401':
+          description: Неверный или отсутствующий API-ключ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: unauthorized
+        '404':
+          description: Аккаунт с указанным Telegram ID не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: account_not_found
+        '405':
+          description: Метод не поддерживается
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: method_not_allowed
+        '409':
+          description: Игрок не ожидает подтверждения 2FA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: not_pending
+                message: Player is not awaiting 2FA confirmation
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        Общий секретный ключ. Задаётся в `config.yml` плагина (`rest-api.api-key`).
+        Если ключ пустой — проверка отключена (только для разработки).
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-07-06T12:00:00Z"
+
+    TwoFactorConfirmRequest:
+      type: object
+      required:
+        - userId
+        - nickname
+        - status
+      properties:
+        userId:
+          type: string
+          description: Telegram ID пользователя (тот же, что передаётся в AuthBot при инициации 2FA)
+          example: "123456789"
+        nickname:
+          type: string
+          description: Никнейм игрока на сервере (регистронезависимое сравнение)
+          example: Steve
+        status:
+          type: string
+          enum:
+            - approved
+            - denied
+          description: Результат подтверждения в Telegram-боте
+
+    TwoFactorConfirmedResponse:
+      type: object
+      required:
+        - status
+        - nickname
+        - online
+      properties:
+        status:
+          type: string
+          enum:
+            - confirmed
+        nickname:
+          type: string
+          example: Steve
+        online:
+          type: boolean
+          description: Находится ли игрок онлайн на сервере в момент обработки
+          example: true
+
+    TwoFactorRejectedResponse:
+      type: object
+      required:
+        - status
+        - nickname
+      properties:
+        status:
+          type: string
+          enum:
+            - rejected
+        nickname:
+          type: string
+          example: Steve
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Код ошибки
+          example: bad_request
+        message:
+          type: string
+          description: Человекочитаемое описание (опционально)
+          example: Missing required field userId
