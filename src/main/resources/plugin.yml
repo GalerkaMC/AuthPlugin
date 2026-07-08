@@ -1,7 +1,7 @@
 name: GalerkaAuthPlugin
 version: '${version}'
 main: org.justiks.galerkaAuthPlugin.GalerkaAuthPlugin
-api-version: '26.2'
+api-version: '26.1'
 load: POSTWORLD
 description: Плагин авторизации с SQLite и хешированием паролей
 

@@ -1,7 +1,6 @@
 package org.justiks.galerkaAuthPlugin.twofactor;
 
 import org.justiks.galerkaAuthPlugin.config.PluginConfig;
-import org.justiks.galerkaAuthPlugin.util.JsonUtils;
 
 import java.io.IOException;
 import java.net.URI;
@@ -16,7 +15,7 @@ import java.util.logging.Logger;
  * HTTP-клиент для взаимодействия с микросервисом AuthBot.
  * <p>
  * Отправляет запросы на инициацию двухфакторной аутентификации
- * (POST {@code /api/v1/2fa/} согласно спецификации AuthBot).
+ * (POST {@code /api/v1/2fa} согласно спецификации AuthBot).
  */
 public final class AuthBotClient {
 
@@ -34,6 +33,7 @@ public final class AuthBotClient {
         this.config = config;
         this.logger = logger;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1) // Принудительно используем HTTP/1.1 во избежание потери тела (h2c)
                 .connectTimeout(Duration.ofSeconds(config.getAuthBotRequestTimeoutSeconds()))
                 .build();
     }
@@ -41,7 +41,7 @@ public final class AuthBotClient {
     /**
      * Отправляет запрос на инициацию 2FA в AuthBot.
      * <p>
-     * POST {@code /api/v1/2fa/} с телом {@code {"userId": "...", "nickname": "..."}}.
+     * POST {@code /api/v1/2fa} с телом {@code {"userId": "...", "nickname": "..."}}.
      *
      * @param telegramId Telegram ID пользователя
      * @param nickname   ник игрока на сервере
@@ -53,8 +53,13 @@ public final class AuthBotClient {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
 
-        String requestBody = JsonUtils.object("userId", telegramId, "nickname", nickname);
-        URI uri = URI.create(baseUrl + "/api/v1/2fa/");
+        // Формируем JSON-строку. userId отправляем числом (без кавычек), nickname — строкой
+        String requestBody = String.format(
+            "{\"userId\": \"%s\", \"nickname\": \"%s\"}",
+            telegramId, nickname
+        );
+
+        URI uri = URI.create(baseUrl + "/api/v1/2fa");
 
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(config.getAuthBotRequestTimeoutSeconds()))

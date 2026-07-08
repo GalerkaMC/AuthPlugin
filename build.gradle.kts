@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
 
     implementation("org.hibernate.orm:hibernate-core:6.6.4.Final")
     implementation("org.hibernate.orm:hibernate-community-dialects:6.6.4.Final")
@@ -37,7 +37,7 @@ tasks {
     }
 
     runServer {
-        minecraftVersion("26.2")
+        minecraftVersion("26.1")
         jvmArgs("-Xms2G", "-Xmx2G")
     }
 
