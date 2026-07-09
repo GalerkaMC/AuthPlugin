@@ -5,9 +5,10 @@ import org.bukkit.Bukkit;
 import org.justiks.galerkaAuthPlugin.GalerkaAuthPlugin;
 import org.justiks.galerkaAuthPlugin.database.entity.UserEntity;
 import org.justiks.galerkaAuthPlugin.util.JsonUtils;
-import org.justiks.galerkaAuthPlugin.util.SimpleJsonParser;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -27,6 +28,12 @@ public final class TwoFactorConfirmHandler {
     private TwoFactorConfirmHandler() {
     }
 
+    private record TwoFactorConfirmationBody(
+        String userId,
+        String nickname,
+        String status
+    ) {}
+
     /**
      * @return обработчик подтверждения 2FA
      */
@@ -45,29 +52,28 @@ public final class TwoFactorConfirmHandler {
             return;
         }
 
-        String body = RequestBodies.readString(exchange);
-        Optional<String> userIdOptional = SimpleJsonParser.getString(body, "userId");
-        Optional<String> nicknameOptional = SimpleJsonParser.getString(body, "nickname");
-        Optional<String> statusOptional = SimpleJsonParser.getString(body, "status");
+        String requestString = RequestBodies.readString(exchange);
 
-        if (userIdOptional.isEmpty()) {
+        TwoFactorConfirmationBody requestBody = JsonUtils.GSON.fromJson(requestString, TwoFactorConfirmationBody.class);
+
+        if (requestBody.userId.isEmpty()) {
             HttpResponses.badRequest(exchange, "Missing required field: userId");
             return;
         }
 
-        if (nicknameOptional.isEmpty()) {
+        if (requestBody.nickname.isEmpty()) {
             HttpResponses.badRequest(exchange, "Missing required field: nickname");
             return;
         }
 
-        if (statusOptional.isEmpty()) {
+        if (requestBody.status.isEmpty()) {
             HttpResponses.badRequest(exchange, "Missing required field: status");
             return;
         }
 
-        String userId = userIdOptional.get();
-        String nickname = nicknameOptional.get();
-        String status = statusOptional.get().toLowerCase();
+        String userId = requestBody.userId;
+        String nickname = requestBody.nickname;
+        String status = requestBody.status.toLowerCase();
 
         if (!"approved".equals(status) && !"denied".equals(status)) {
             HttpResponses.badRequest(exchange, "Invalid status. Allowed values: approved, denied");
@@ -93,10 +99,15 @@ public final class TwoFactorConfirmHandler {
                 plugin.rejectTwoFactorAuthentication(playerUuid);
                 return true;
             });
-            HttpResponses.json(exchange, 200, JsonUtils.object(
-                    "status", "rejected",
-                    "nickname", nickname
-            ));
+
+            // Формируем ответный json
+            Map<String, Object> responseData = new LinkedHashMap<>();
+            responseData.put("status", "rejected");
+            responseData.put("nickname", nickname);
+
+            String formattedString = JsonUtils.GSON.toJson(responseData);
+
+            HttpResponses.json(exchange, 200, formattedString);
             return;
         }
 
@@ -115,13 +126,15 @@ public final class TwoFactorConfirmHandler {
         }
 
         boolean online = Bukkit.getPlayer(playerUuid) != null;
-        HttpResponses.json(exchange, 200,
-                "{"
-                        + "\"status\":\"confirmed\","
-                        + "\"nickname\":\"" + JsonUtils.escape(nickname) + "\","
-                        + "\"online\":" + online
-                        + "}"
-        );
+
+        Map<String, Object> responseData = new LinkedHashMap<>();
+        responseData.put("status", "confirmed");
+        responseData.put("nickname", nickname);
+        responseData.put("online", online);
+
+        String formattedString = JsonUtils.GSON.toJson(responseData);
+
+        HttpResponses.json(exchange, 200, formattedString);
     }
 
     private static boolean isAuthorized(HttpExchange exchange, GalerkaAuthPlugin plugin) {
