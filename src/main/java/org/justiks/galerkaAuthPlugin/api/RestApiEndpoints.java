@@ -25,6 +25,8 @@ public final class RestApiEndpoints {
     public static void registerDefaults(GalerkaAuthPlugin plugin, RestApiRouter router) {
         router.register("GET", "/api/v1/health/", health());
         router.register("POST", "/api/v1/2fa/confirm/", TwoFactorConfirmHandler.create());
+        router.register("POST", "/api/v1/whitelist/add/", AddWhitelistHandler.create());
+        router.register("GET", "/api/v1/whitelist/exists/", CheckWhitelistHandler.create());
     }
 
     /**
