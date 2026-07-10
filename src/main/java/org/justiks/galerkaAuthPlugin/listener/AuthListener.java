@@ -75,6 +75,10 @@ public final class AuthListener implements Listener {
                             plugin.getAuthService().findByUsername(player.getName()).get(),
                             player.getName()
                     );
+                    plugin.getAuthManager().setPendingTwoFactor(
+                            player.getUniqueId(),
+                            PlayerIpResolver.resolve(player)
+                    );
                 }
             });
         });
