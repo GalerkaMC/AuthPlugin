@@ -17,9 +17,6 @@ info:
     3. Игрок подтверждает или отклоняет вход в Telegram-боте.
     4. AuthBot вызывает `POST /api/v1/2fa/confirm/` на REST API плагина.
     5. Плагин расфризит игрока (при `approved`) или оставляет его в ожидании нового входа (при `denied`).
-    
-    > ⚠️ **Важно:** API не является публичным. Порт должен быть доступен только доверенным
-    > микросервисам внутри сети. Используйте заголовок `X-Api-Key` для аутентификации.
 
 servers:
   - url: http://127.0.0.1:8080
@@ -157,15 +154,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-Api-Key
-      description: |
-        Общий секретный ключ. Задаётся в `config.yml` плагина (`rest-api.api-key`).
-        Если ключ пустой — проверка отключена (только для разработки).
-
   schemas:
     HealthResponse:
       type: object

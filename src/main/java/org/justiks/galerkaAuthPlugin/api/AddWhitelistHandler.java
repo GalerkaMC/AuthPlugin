@@ -17,17 +17,20 @@ import java.util.UUID;
  */
 public final class AddWhitelistHandler {
 
-    private AddWhitelistHandler() {}
+    private AddWhitelistHandler() {
+    }
 
     /**
      * Модель тела запроса, который приходит с клиента на эндпоинт
-     * @param userId telegram user id
+     *
+     * @param userId   telegram user id
      * @param nickname minecraft nickname
      */
-    private record WhitelistAddRequestBody (
+    private record WhitelistAddRequestBody(
             OptionalLong userId,
             Optional<String> nickname
-    ) {}
+    ) {
+    }
 
     public static RestEndpointHandler create() {
         return (exchange, context) -> handle(exchange, context.getPlugin());
@@ -36,11 +39,6 @@ public final class AddWhitelistHandler {
     public static void handle(HttpExchange exchange, GalerkaAuthPlugin plugin) throws IOException {
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             HttpResponses.methodNotAllowed(exchange);
-            return;
-        }
-
-        if (!isAuthorized(exchange, plugin)) {
-            HttpResponses.unauthorized(exchange);
             return;
         }
 
@@ -84,18 +82,4 @@ public final class AddWhitelistHandler {
 
         HttpResponses.json(exchange, 200, "");
     }
-
-    private static boolean isAuthorized(HttpExchange exchange, GalerkaAuthPlugin plugin) {
-        String configuredKey = plugin.getPluginConfig().getRestApiKey();
-        if (configuredKey == null || configuredKey.isBlank()) {
-            return true;
-        }
-
-        String providedKey = exchange.getRequestHeaders().getFirst("X-Api-Key");
-        return configuredKey.equals(providedKey);
-    }
-
-
-
-
 }

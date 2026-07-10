@@ -47,11 +47,6 @@ public final class TwoFactorConfirmHandler {
             return;
         }
 
-        if (!isAuthorized(exchange, plugin)) {
-            HttpResponses.unauthorized(exchange);
-            return;
-        }
-
         String requestString = RequestBodies.readString(exchange);
 
         TwoFactorConfirmationBody requestBody = JsonUtils.GSON.fromJson(requestString, TwoFactorConfirmationBody.class);
@@ -135,16 +130,6 @@ public final class TwoFactorConfirmHandler {
         String formattedString = JsonUtils.GSON.toJson(responseData);
 
         HttpResponses.json(exchange, 200, formattedString);
-    }
-
-    private static boolean isAuthorized(HttpExchange exchange, GalerkaAuthPlugin plugin) {
-        String configuredKey = plugin.getPluginConfig().getRestApiKey();
-        if (configuredKey == null || configuredKey.isBlank()) {
-            return true;
-        }
-
-        String providedKey = exchange.getRequestHeaders().getFirst("X-Api-Key");
-        return configuredKey.equals(providedKey);
     }
 
     private static boolean runOnMainThread(GalerkaAuthPlugin plugin, Supplier<Boolean> action) throws IOException {

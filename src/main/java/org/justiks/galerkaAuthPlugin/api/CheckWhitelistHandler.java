@@ -32,11 +32,6 @@ public class CheckWhitelistHandler {
             return;
         }
 
-        if (!isAuthorized(exchange, plugin)) {
-            HttpResponses.unauthorized(exchange);
-            return;
-        }
-
         // Extract params
         String query = exchange.getRequestURI().getQuery();
         Map<String, String> params = new HashMap<>();
@@ -73,15 +68,5 @@ public class CheckWhitelistHandler {
                 exchange,
                 200,
                 JsonUtils.GSON.toJson(responseMap));
-    }
-
-    private static boolean isAuthorized(HttpExchange exchange, GalerkaAuthPlugin plugin) {
-        String configuredKey = plugin.getPluginConfig().getRestApiKey();
-        if (configuredKey == null || configuredKey.isBlank()) {
-            return true;
-        }
-
-        String providedKey = exchange.getRequestHeaders().getFirst("X-Api-Key");
-        return configuredKey.equals(providedKey);
     }
 }
