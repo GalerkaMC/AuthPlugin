@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -87,11 +86,11 @@ public final class TwoFactorConfirmHandler {
             return;
         }
 
-        UUID playerUuid = UUID.fromString(user.getUuid());
+        String username = user.getUsername();
 
         if ("denied".equals(status)) {
             runOnMainThread(plugin, () -> {
-                plugin.rejectTwoFactorAuthentication(playerUuid);
+                plugin.rejectTwoFactorAuthentication(username);
                 return true;
             });
 
@@ -106,21 +105,18 @@ public final class TwoFactorConfirmHandler {
             return;
         }
 
-        if (!plugin.getAuthManager().isPendingTwoFactor(playerUuid)) {
+        if (!plugin.getAuthManager().isPendingTwoFactor(username)) {
             HttpResponses.notPending(exchange);
             return;
         }
 
-        boolean confirmed = runOnMainThread(plugin, () ->
-                plugin.completeTwoFactorAuthentication(playerUuid)
+        runOnMainThread(plugin, () -> {
+                    plugin.getAuthListener().interruptThreadByNickname(nickname);
+                    return true;
+                }
         );
 
-        if (!confirmed) {
-            HttpResponses.notPending(exchange);
-            return;
-        }
-
-        boolean online = Bukkit.getPlayer(playerUuid) != null;
+        boolean online = Bukkit.getPlayer(username) != null;
 
         Map<String, Object> responseData = new LinkedHashMap<>();
         responseData.put("status", "confirmed");

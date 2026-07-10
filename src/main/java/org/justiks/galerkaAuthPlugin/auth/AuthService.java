@@ -32,16 +32,6 @@ public final class AuthService {
     }
 
     /**
-     * Ищет пользователя по UUID.
-     *
-     * @param uuid UUID игрока
-     * @return найденная сущность или пустой {@link Optional}
-     */
-    public Optional<UserEntity> findByUuid(UUID uuid) {
-        return databaseManager.inSession(session -> findByUuidField(session, uuid));
-    }
-
-    /**
      * Ищет пользователя по нику (регистронезависимо).
      *
      * @param username ник игрока
@@ -73,16 +63,6 @@ public final class AuthService {
     }
 
     /**
-     * Проверяет, зарегистрирован ли игрок с указанным UUID.
-     *
-     * @param uuid UUID игрока
-     * @return {@code true}, если аккаунт существует
-     */
-    public boolean isRegistered(UUID uuid) {
-        return findByUuid(uuid).isPresent();
-    }
-
-    /**
      * Проверяет, занят ли указанный ник.
      *
      * @param username ник игрока
@@ -96,18 +76,18 @@ public final class AuthService {
      * Регистрирует новый аккаунт игрока.
      *
      * @param username        ник игрока
-     * @param uuid            UUID игрока
      * @param ip              IP-адрес игрока для создания сессии
+     * @param telegramId      user Id игрока в telegram
      * @return результат регистрации
      */
     public RegisterResult register(
             String username,
-            UUID uuid,
-            String ip
+            String ip,
+            String telegramId
     ) {
         String normalized = normalizeUsername(username);
 
-        if (isRegistered(uuid)) {
+        if (isRegistered(username)) {
             return RegisterResult.ALREADY_REGISTERED;
         }
 
@@ -117,8 +97,8 @@ public final class AuthService {
 
         UserEntity user = new UserEntity(
                 normalized,
-                uuid.toString(),
-                Instant.now()
+                Instant.now(),
+                telegramId
         );
         createSession(user, ip);
 
@@ -134,11 +114,11 @@ public final class AuthService {
      * Завершает вход: обновляет время последнего входа и создаёт IP-сессию.
      * Вызывается после успешной проверки пароля (и 2FA, если требуется).
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      * @param ip   IP-адрес игрока
      */
-    public void finalizeLogin(UUID uuid, String ip) {
-        Optional<UserEntity> userOptional = findByUuid(uuid);
+    public void finalizeLogin(String username, String ip) {
+        Optional<UserEntity> userOptional = findByUsername(username);
         if (userOptional.isEmpty()) {
             return;
         }
@@ -152,16 +132,16 @@ public final class AuthService {
     /**
      * Пытается автоматически авторизовать игрока по действующей IP-сессии.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      * @param ip   текущий IP-адрес игрока
      * @return {@code true}, если авто-логин выполнен успешно
      */
-    public boolean tryAutoLogin(UUID uuid, String ip) {
+    public boolean tryAutoLogin(String username, String ip) {
         if (!config.isIpSessionEnabled()) {
             return false;
         }
 
-        Optional<UserEntity> userOptional = findByUuid(uuid);
+        Optional<UserEntity> userOptional = findByUsername(username);
         if (userOptional.isEmpty()) {
             return false;
         }
@@ -180,10 +160,10 @@ public final class AuthService {
     /**
      * Сбрасывает IP-сессию игрока (при выходе из аккаунта).
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      */
-    public void clearSession(UUID uuid) {
-        Optional<UserEntity> userOptional = findByUuid(uuid);
+    public void clearSession(String username) {
+        Optional<UserEntity> userOptional = findByUsername(username);
         if (userOptional.isEmpty()) {
             return;
         }
@@ -237,22 +217,6 @@ public final class AuthService {
             session.merge(user);
             return null;
         });
-    }
-
-    /**
-     * Ищет пользователя по UUID внутри открытой Hibernate-сессии.
-     *
-     * @param session открытая сессия Hibernate
-     * @param uuid    UUID игрока
-     * @return найденная сущность или пустой {@link Optional}
-     */
-    private Optional<UserEntity> findByUuidField(Session session, UUID uuid) {
-        return session.createQuery(
-                        "FROM UserEntity u WHERE u.uuid = :uuid",
-                        UserEntity.class
-                )
-                .setParameter("uuid", uuid.toString())
-                .uniqueResultOptional();
     }
 
     /**

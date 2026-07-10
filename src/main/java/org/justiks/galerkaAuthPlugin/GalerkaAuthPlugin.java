@@ -38,6 +38,7 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
     private PlayerRestrictionService restrictionService;
     private TwoFactorService twoFactorService;
     private RestApiServer restApiServer;
+    private AuthListener authListener;
 
     /**
      * Вызывается при включении плагина.
@@ -74,7 +75,8 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
         }
 
         registerCommands();
-        getServer().getPluginManager().registerEvents(new AuthListener(this), this);
+        authListener = new AuthListener();
+        getServer().getPluginManager().registerEvents(authListener, this);
 
         getLogger().info("GalerkaAuthPlugin успешно включён.");
     }
@@ -111,18 +113,18 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
      * @param player игрок, прошедший авторизацию
      */
     public void completeAuthentication(Player player) {
-        authManager.authenticate(player.getUniqueId());
+        authManager.authenticate(player.getName());
         restrictionService.unrestrict(player);
     }
 
     /**
      * Переводит игрока в состояние ожидания подтверждения 2FA.
-     * Игрок остаётся замороженным до вызова {@link #completeTwoFactorAuthentication(UUID)}.
+     * Игрок остаётся замороженным до вызова {@link #completeTwoFactorAuthentication(String)}.
      *
      * @param player игрок, ожидающий подтверждения 2FA
      */
     public void beginTwoFactorAuthentication(Player player) {
-        authManager.setPendingTwoFactor(player.getUniqueId(), PlayerIpResolver.resolve(player));
+        authManager.setPendingTwoFactor(player.getName(), PlayerIpResolver.resolve(player));
         restrictionService.restrict(player);
     }
 
@@ -131,19 +133,19 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
      * <p>
      * Предназначен для вызова из REST callback AuthBot после подтверждения входа в Telegram.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      * @return {@code true}, если игрок был в ожидании 2FA и успешно авторизован
      */
-    public boolean completeTwoFactorAuthentication(UUID uuid) {
-        if (!authManager.isPendingTwoFactor(uuid)) {
+    public boolean completeTwoFactorAuthentication(String username) {
+        if (!authManager.isPendingTwoFactor(username)) {
             return false;
         }
 
-        String ip = authManager.getPendingTwoFactorIp(uuid);
-        authService.finalizeLogin(uuid, ip);
-        authManager.authenticate(uuid);
+        String ip = authManager.getPendingTwoFactorIp(username);
+        authService.finalizeLogin(username, ip);
+        authManager.authenticate(username);
 
-        Player player = Bukkit.getPlayer(uuid);
+        Player player = Bukkit.getPlayer(username);
         if (player != null && player.isOnline()) {
             restrictionService.unrestrict(player);
             player.sendMessage(pluginConfig.message("two-factor-success"));
@@ -156,16 +158,16 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
      * Отклоняет 2FA и снимает состояние ожидания подтверждения.
      * Игрок остаётся замороженным и должен повторить вход.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      */
-    public void rejectTwoFactorAuthentication(UUID uuid) {
-        if (!authManager.isPendingTwoFactor(uuid)) {
+    public void rejectTwoFactorAuthentication(String username) {
+        if (!authManager.isPendingTwoFactor(username)) {
             return;
         }
 
-        authManager.clearPendingTwoFactor(uuid);
+        authManager.clearPendingTwoFactor(username);
 
-        Player player = Bukkit.getPlayer(uuid);
+        Player player = Bukkit.getPlayer(username);
         if (player != null && player.isOnline()) {
             player.sendMessage(pluginConfig.message("two-factor-denied"));
         }
@@ -177,7 +179,7 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
      * @param player игрок, которому требуется авторизация
      */
     public void requireAuthentication(Player player) {
-        authManager.unauthenticate(player.getUniqueId());
+        authManager.unauthenticate(player.getName());
         restrictionService.restrict(player);
     }
 
@@ -271,4 +273,9 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
     public TwoFactorService getTwoFactorService() {
         return twoFactorService;
     }
+
+    /**
+     * @return Хендлер отвечающий за авторизацию
+     */
+    public AuthListener getAuthListener() {return authListener;}
 }

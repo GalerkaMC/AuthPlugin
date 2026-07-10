@@ -20,9 +20,6 @@ public class UserEntity {
     @Column(name = "username", nullable = false, length = 16)
     private String username;
 
-    @Column(name = "uuid", nullable = false, unique = true, length = 36)
-    private String uuid;
-
     @Column(name = "registered_at", nullable = false)
     private Instant registeredAt;
 
@@ -48,13 +45,13 @@ public class UserEntity {
      * Создаёт новую запись пользователя при регистрации.
      *
      * @param username     нормализованный ник игрока (первичный ключ)
-     * @param uuid           UUID игрока в строковом виде
      * @param registeredAt   момент регистрации
+     * @param telegramId    user Id пользователя в telegram
      */
-    public UserEntity(String username, String uuid, Instant registeredAt) {
+    public UserEntity(String username, Instant registeredAt, String telegramId) {
         this.username = username;
-        this.uuid = uuid;
         this.registeredAt = registeredAt;
+        this.telegramId = telegramId;
     }
 
     /**
@@ -69,20 +66,6 @@ public class UserEntity {
      */
     public void setUsername(String username) {
         this.username = username;
-    }
-
-    /**
-     * @return UUID игрока в строковом виде
-     */
-    public String getUuid() {
-        return uuid;
-    }
-
-    /**
-     * @param uuid UUID игрока в строковом виде
-     */
-    public void setUuid(String uuid) {
-        this.uuid = uuid;
     }
 
     /**

@@ -8,9 +8,6 @@ import org.justiks.galerkaAuthPlugin.auth.AuthService;
 import org.justiks.galerkaAuthPlugin.util.JsonUtils;
 
 import java.io.IOException;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.UUID;
 
 /**
  * Add to whitelist handler
@@ -67,13 +64,16 @@ public final class AddWhitelistHandler {
 
         authService.register(
                 nickname,
-                UUID.randomUUID(), // TOOD: remove it
-                ""
+                "",
+                String.valueOf(userId)
         );
 
         // Add to whitelist
-        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(nickname);
-        offlinePlayer.setWhitelisted(true);
+
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(nickname);
+            offlinePlayer.setWhitelisted(true);
+        });
 
         HttpResponses.json(exchange, 200, "");
     }

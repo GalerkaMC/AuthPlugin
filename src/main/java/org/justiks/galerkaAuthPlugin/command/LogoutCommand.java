@@ -62,7 +62,7 @@ public final class LogoutCommand implements CommandExecutor, TabCompleter {
         }
 
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            authService.clearSession(player.getUniqueId());
+            authService.clearSession(player.getName());
 
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 plugin.requireAuthentication(player);

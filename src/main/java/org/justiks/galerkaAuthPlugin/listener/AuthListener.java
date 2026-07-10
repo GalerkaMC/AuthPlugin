@@ -1,334 +1,135 @@
 package org.justiks.galerkaAuthPlugin.listener;
 
-import io.papermc.paper.event.player.AsyncChatEvent;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
+import com.google.common.collect.ImmutableList;
+import io.papermc.paper.connection.PlayerConfigurationConnection;
+import io.papermc.paper.connection.PlayerConnection;
+import io.papermc.paper.dialog.Dialog;
+import io.papermc.paper.event.connection.configuration.AsyncPlayerConnectionConfigureEvent;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.action.DialogActionCallback;
+import io.papermc.paper.registry.data.dialog.body.DialogBody;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
+import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockDamageEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.inventory.InventoryOpenEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerSwapHandItemsEvent;
-import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.justiks.galerkaAuthPlugin.GalerkaAuthPlugin;
-import org.justiks.galerkaAuthPlugin.util.PlayerIpResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/**
- * Слушатель событий, обеспечивающий защиту неавторизованных игроков.
- * <p>
- * Блокирует движение, взаимодействие, урон, чат и команды до прохождения авторизации.
- * При входе на сервер пытается выполнить авто-логин по IP-сессии.
- */
-public final class AuthListener implements Listener {
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
-    private final GalerkaAuthPlugin plugin;
+public class AuthListener implements Listener {
+    private final Map<String, Thread> threadsMap = new HashMap<>();
+    private static final GalerkaAuthPlugin plugin = GalerkaAuthPlugin.getPlugin(GalerkaAuthPlugin.class);
+    private static final int MAX_AUTH_TIME_SECONDS = 30;
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthListener.class);
+    private static final Component CANCELLED = Component.text("Авторизация отменена.", NamedTextColor.RED);
+    private static final Component LOITERING_KICK = Component.text("Время истекло.", NamedTextColor.RED);
+    private static final Component ERROR = Component.text("Ошибк.", NamedTextColor.RED);
+    private static final Dialog[] REMAINING_TIME_DIALOGS = new Dialog[MAX_AUTH_TIME_SECONDS];
 
-    /**
-     * Создаёт слушатель событий авторизации.
-     *
-     * @param plugin экземпляр плагина
-     */
-    public AuthListener(GalerkaAuthPlugin plugin) {
-        this.plugin = plugin;
-    }
-
-    /**
-     * Обрабатывает вход игрока: применяет ограничения и пытается авто-логин.
-     *
-     * @param event событие входа игрока
-     */
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-
-        plugin.requireAuthentication(player);
-
-        String ip = PlayerIpResolver.resolve(player);
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean autoLoggedIn = plugin.getAuthService().tryAutoLogin(player.getUniqueId(), ip);
-            boolean registered = autoLoggedIn || plugin.getAuthService().isRegistered(player.getUniqueId());
-
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (!player.isOnline()) {
-                    return;
-                }
-
-                if (autoLoggedIn) {
-                    plugin.completeAuthentication(player);
-                    player.sendMessage(plugin.getPluginConfig().message("auto-login-success"));
-                    return;
-                }
-
-                if (registered) {
-                    player.sendMessage(plugin.getPluginConfig().message("two-factor-pending"));
-                    plugin.getTwoFactorService().requestConfirmation(
-                            plugin.getAuthService().findByUsername(player.getName()).get(),
-                            player.getName()
-                    );
-                    plugin.getAuthManager().setPendingTwoFactor(
-                            player.getUniqueId(),
-                            PlayerIpResolver.resolve(player)
-                    );
-                }
-            });
-        });
-    }
-
-    /**
-     * Обрабатывает выход игрока: сбрасывает авторизацию и снимает ограничения.
-     *
-     * @param event событие выхода игрока
-     */
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        Player player = event.getPlayer();
-        plugin.getAuthManager().unauthenticate(player.getUniqueId());
-        plugin.getRestrictionService().unrestrict(player);
-    }
-
-    /**
-     * Блокирует перемещение неавторизованного игрока и возвращает на точку заморозки.
-     *
-     * @param event событие перемещения
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onMove(PlayerMoveEvent event) {
-        if (!shouldRestrict(event.getPlayer())) {
-            return;
-        }
-
-        if (!hasMoved(event)) {
-            return;
-        }
-
-        event.setCancelled(true);
-        teleportToFrozenLocation(event.getPlayer());
-    }
-
-    /**
-     * Дополнительная проверка перемещения на этапе MONITOR для надёжной телепортации.
-     *
-     * @param event событие перемещения
-     */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onMoveMonitor(PlayerMoveEvent event) {
-        if (!shouldRestrict(event.getPlayer()) || !hasMoved(event)) {
-            return;
-        }
-
-        teleportToFrozenLocation(event.getPlayer());
-    }
-
-    /**
-     * Блокирует чат неавторизованного игрока.
-     *
-     * @param event событие чата
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onChat(AsyncChatEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-            plugin.getServer().getScheduler().runTask(plugin, () ->
-                    event.getPlayer().sendMessage(plugin.getPluginConfig().message("must-auth"))
+    static {
+        final DialogActionCallback callback = (_, audience) -> {
+            audience.closeDialog();
+            if (!(audience instanceof PlayerConnection connection)) return;
+            connection.disconnect(CANCELLED);
+        };
+        final DialogType type = DialogType.notice(ActionButton.builder(Component.text("Отключиться",
+                NamedTextColor.WHITE)).action(DialogAction.customClick(callback, ClickCallback.Options.builder()
+                .uses(ClickCallback.UNLIMITED_USES).lifetime(Duration.ofSeconds(Long.MAX_VALUE)).build())).build());
+        final Component title = Component.text("Авторизация", NamedTextColor.WHITE);
+        final Component messagePrefix = Component.text("Подтвердите вход через бота в ", NamedTextColor.WHITE)
+                .append(Component.text("Telegram", NamedTextColor.AQUA))
+                .append(Component.text(". Осталось времени: ", NamedTextColor.WHITE));
+        final Component messageSuffix = Component.text(" сек.", NamedTextColor.WHITE);
+        for (int seconds = 0; seconds < MAX_AUTH_TIME_SECONDS; seconds++) {
+            final Component messageInfix = Component.text((seconds + 1), NamedTextColor.AQUA);
+            REMAINING_TIME_DIALOGS[seconds] = Dialog.create(builder -> builder.empty()
+                    .type(type)
+                    .base(DialogBase.builder(title)
+                            .body(ImmutableList.of(DialogBody.plainMessage(messagePrefix
+                                    .append(messageInfix)
+                                    .append(messageSuffix))))
+                            .build()
+                    )
             );
         }
     }
 
-    /**
-     * Разрешает только команды авторизации до входа в аккаунт.
-     *
-     * @param event событие ввода команды
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onCommand(PlayerCommandPreprocessEvent event) {
-        if (!shouldRestrict(event.getPlayer())) {
+    @EventHandler(ignoreCancelled = true)
+    private void onConfigure(final AsyncPlayerConnectionConfigureEvent event) {
+        final PlayerConfigurationConnection connection = event.getConnection();
+        final Audience audience = connection.getAudience();
+        try {
+            this.beginAuthentication(connection, Thread.currentThread());
+            try {
+                for (int seconds = MAX_AUTH_TIME_SECONDS; seconds >= 0; seconds--) {
+                    Thread.sleep(1000L);
+                    if (!connection.isConnected()) break;
+                    if (seconds == 0) {
+                        audience.closeDialog();
+                        connection.disconnect(LOITERING_KICK);
+                        break;
+                    }
+                    final Dialog dialog = REMAINING_TIME_DIALOGS[seconds - 1];
+                    audience.showDialog(dialog);
+                }
+            } catch (final InterruptedException ignored) {
+                this.authenticationSuccess(connection);
+                return;
+            }
+            this.authenticationFailure(connection);
+        } catch (final Throwable t) {
+            LOGGER.error("Unable to authenticate the player: {}", connection, t);
+            audience.closeDialog();
+            connection.disconnect(ERROR);
+            throw new RuntimeException("Unable to authenticate the player: " + connection, t);
+        }
+    }
+
+    private void beginAuthentication(final PlayerConfigurationConnection connection, final Thread thread) {
+        threadsMap.put(connection.getProfile().getName(), thread);
+
+        String ip = connection.getAddress().toString();
+        boolean autoLoggedIn = plugin.getAuthService().tryAutoLogin(connection.getProfile().getName(), ip);
+
+        if (autoLoggedIn) {
+            authenticationSuccess(connection);
             return;
         }
 
-        String command = event.getMessage().substring(1).split("\\s+")[0].toLowerCase();
-        if (plugin.getPluginConfig().getAllowedCommands().contains(command)) {
-            return;
-        }
-
-        event.setCancelled(true);
-        event.getPlayer().sendMessage(plugin.getPluginConfig().message("must-auth"));
+        plugin.getTwoFactorService().requestConfirmation(
+                plugin.getAuthService().findByUsername(connection.getProfile().getName()).get(),
+                connection.getProfile().getName()
+        );
+        plugin.getAuthManager().setPendingTwoFactor(
+                connection.getProfile().getName(),
+                ip
+        );
     }
 
-    /**
-     * Блокирует взаимодействие с блоками и предметами.
-     *
-     * @param event событие взаимодействия
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onInteract(PlayerInteractEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-        }
+    private void authenticationSuccess(final PlayerConfigurationConnection connection) {
+        threadsMap.remove(connection.getProfile().getName());
     }
 
-    /**
-     * Блокирует выбрасывание предметов.
-     *
-     * @param event событие выбрасывания предмета
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-        }
+    private void authenticationFailure(final PlayerConfigurationConnection connection) {
+        threadsMap.remove(connection.getProfile().getName());
+        Component desc = Component.text("Ты не успел авторизоваться за указанное время!");
+        connection.disconnect(desc);
     }
 
-    /**
-     * Блокирует смену предметов между руками.
-     *
-     * @param event событие смены предметов в руках
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onSwapHand(PlayerSwapHandItemsEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
+    public void interruptThreadByNickname(String nickname) {
+        Thread thread = threadsMap.get(nickname);
+        if (thread == null) {
+            throw new NullPointerException("");
         }
-    }
-
-    /**
-     * Блокирует переключение режима полёта.
-     *
-     * @param event событие переключения полёта
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onToggleFlight(PlayerToggleFlightEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Блокирует ломание блоков.
-     *
-     * @param event событие ломания блока
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onBreak(BlockBreakEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Блокирует начало разрушения блока (трещины на блоке).
-     *
-     * @param event событие повреждения блока
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onBlockDamage(BlockDamageEvent event) {
-        if (event.getPlayer() != null && shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Блокирует установку блоков.
-     *
-     * @param event событие установки блока
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPlace(BlockPlaceEvent event) {
-        if (shouldRestrict(event.getPlayer())) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Блокирует получение урона неавторизованным игроком.
-     *
-     * @param event событие урона
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player player && shouldRestrict(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Блокирует урон от и к неавторизованным игрокам.
-     *
-     * @param event событие урона от сущности
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onDamageByEntity(EntityDamageByEntityEvent event) {
-        if (event.getEntity() instanceof Player player && shouldRestrict(player)) {
-            event.setCancelled(true);
-            return;
-        }
-
-        if (event.getDamager() instanceof Player player && shouldRestrict(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Блокирует открытие инвентарей (сундуки, верстаки и т.д.).
-     *
-     * @param event событие открытия инвентаря
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onInventoryOpen(InventoryOpenEvent event) {
-        if (event.getPlayer() instanceof Player player && shouldRestrict(player)) {
-            event.setCancelled(true);
-        }
-    }
-
-    /**
-     * Определяет, нужно ли применять ограничения к игроку.
-     *
-     * @param player проверяемый игрок
-     * @return {@code true}, если игрок не авторизован и не имеет права обхода
-     */
-    private boolean shouldRestrict(Player player) {
-        return !player.hasPermission("galerkaauth.bypass")
-                && !plugin.getAuthManager().isAuthenticated(player.getUniqueId());
-    }
-
-    /**
-     * Проверяет, изменилась ли позиция игрока (игнорирует поворот головы).
-     *
-     * @param event событие перемещения
-     * @return {@code true}, если игрок сместился хотя бы на один блок
-     */
-    private boolean hasMoved(PlayerMoveEvent event) {
-        return event.getFrom().getBlockX() != event.getTo().getBlockX()
-                || event.getFrom().getBlockY() != event.getTo().getBlockY()
-                || event.getFrom().getBlockZ() != event.getTo().getBlockZ();
-    }
-
-    /**
-     * Телепортирует игрока обратно на точку заморозки.
-     * Если точка не сохранена — повторно применяет ограничения.
-     *
-     * @param player игрок для телепортации
-     */
-    private void teleportToFrozenLocation(Player player) {
-        Location frozenLocation = plugin.getRestrictionService().getFrozenLocation(player.getUniqueId());
-        if (frozenLocation == null) {
-            plugin.getRestrictionService().restrict(player);
-            frozenLocation = plugin.getRestrictionService().getFrozenLocation(player.getUniqueId());
-        }
-
-        if (frozenLocation != null) {
-            player.teleport(frozenLocation);
-        }
-
-        player.setFallDistance(0.0f);
+        thread.interrupt();
     }
 }

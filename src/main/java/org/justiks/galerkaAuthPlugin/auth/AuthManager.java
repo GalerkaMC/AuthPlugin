@@ -12,8 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class AuthManager {
 
-    private final Map<UUID, Boolean> authenticated = new ConcurrentHashMap<>();
-    private final Map<UUID, String> pendingTwoFactorIp = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> authenticated = new ConcurrentHashMap<>();
+    private final Map<String, String> pendingTwoFactorIp = new ConcurrentHashMap<>();
 
     /**
      * Проверяет, авторизован ли игрок в текущей сессии сервера.
@@ -28,60 +28,60 @@ public final class AuthManager {
     /**
      * Проверяет, ожидает ли игрок подтверждения 2FA.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      * @return {@code true}, если пароль принят, но 2FA ещё не подтверждена
      */
-    public boolean isPendingTwoFactor(UUID uuid) {
-        return pendingTwoFactorIp.containsKey(uuid);
+    public boolean isPendingTwoFactor(String username) {
+        return pendingTwoFactorIp.containsKey(username.toLowerCase());
     }
 
     /**
      * Помечает игрока как ожидающего подтверждения 2FA.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      * @param ip   IP-адрес для финализации сессии после подтверждения
      */
-    public void setPendingTwoFactor(UUID uuid, String ip) {
-        pendingTwoFactorIp.put(uuid, ip);
+    public void setPendingTwoFactor(String username, String ip) {
+        pendingTwoFactorIp.put(username.toLowerCase(), ip);
     }
 
     /**
      * Возвращает IP-адрес, сохранённый при начале ожидания 2FA.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      * @return IP-адрес или {@code null}
      */
-    public String getPendingTwoFactorIp(UUID uuid) {
-        return pendingTwoFactorIp.get(uuid);
+    public String getPendingTwoFactorIp(String username) {
+        return pendingTwoFactorIp.get(username.toLowerCase());
     }
 
     /**
      * Сбрасывает состояние ожидания 2FA.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      */
-    public void clearPendingTwoFactor(UUID uuid) {
-        pendingTwoFactorIp.remove(uuid);
+    public void clearPendingTwoFactor(String username) {
+        pendingTwoFactorIp.remove(username.toLowerCase());
     }
 
     /**
      * Помечает игрока как авторизованного и сбрасывает счётчик попыток входа.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      */
-    public void authenticate(UUID uuid) {
-        authenticated.put(uuid, true);
-        clearPendingTwoFactor(uuid);
+    public void authenticate(String username) {
+        authenticated.put(username, true);
+        clearPendingTwoFactor(username);
     }
 
     /**
      * Сбрасывает авторизацию игрока и счётчик попыток входа.
      *
-     * @param uuid UUID игрока
+     * @param username ник игрока
      */
-    public void unauthenticate(UUID uuid) {
-        authenticated.remove(uuid);
-        clearPendingTwoFactor(uuid);
+    public void unauthenticate(String username) {
+        authenticated.remove(username);
+        clearPendingTwoFactor(username);
     }
 
     /**
