@@ -153,6 +153,119 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/whitelist/add/:
+    post:
+      summary: Добавление игрока в вайтлист
+      description: |
+        Регистрирует нового игрока в сервисе авторизации и добавляет его
+        в вайтлист сервера. Если игрок уже зарегистрирован — возвращает ошибку.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhitelistAddRequest'
+            example:
+              userId: "123456789"
+              nickname: Steve
+      responses:
+        '200':
+          description: Игрок успешно добавлен в вайтлист
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Ошибка валидации запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingUserId:
+                  summary: Отсутствует userId
+                  value:
+                    error: bad_request
+                    message: "Missing required field: userId"
+                missingNickname:
+                  summary: Отсутствует nickname
+                  value:
+                    error: bad_request
+                    message: "Missing required field: nickname"
+                alreadyWhitelisted:
+                  summary: Игрок уже в вайтлисте
+                  value:
+                    error: bad_request
+                    message: "Player already whitelisted"
+        '405':
+          description: Метод не поддерживается
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: method_not_allowed
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/whitelist/exists/:
+    get:
+      summary: Проверка наличия игрока в вайтлисте
+      description: |
+        Проверяет, зарегистрирован ли пользователь с указанным Telegram ID
+        в базе данных авторизации.
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Telegram ID пользователя
+          example: "123456789"
+      responses:
+        '200':
+          description: Результат проверки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhitelistExistsResponse'
+              examples:
+                exists:
+                  summary: Пользователь найден
+                  value:
+                    exists: true
+                notExists:
+                  summary: Пользователь не найден
+                  value:
+                    exists: false
+        '400':
+          description: Отсутствует обязательный параметр
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: bad_request
+                message: "Missing req param: userId"
+        '405':
+          description: Метод не поддерживается
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: method_not_allowed
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     HealthResponse:
@@ -223,6 +336,31 @@ components:
         nickname:
           type: string
           example: Steve
+
+    WhitelistAddRequest:
+      type: object
+      required:
+        - userId
+        - nickname
+      properties:
+        userId:
+          type: string
+          description: Telegram ID пользователя
+          example: "123456789"
+        nickname:
+          type: string
+          description: Никнейм игрока на сервере
+          example: Steve
+
+    WhitelistExistsResponse:
+      type: object
+      required:
+        - exists
+      properties:
+        exists:
+          type: boolean
+          description: Найден ли пользователь с указанным Telegram ID в базе
+          example: true
 
     ErrorResponse:
       type: object
