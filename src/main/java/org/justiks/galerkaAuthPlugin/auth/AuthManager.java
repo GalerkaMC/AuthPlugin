@@ -12,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class AuthManager {
 
-    private final Map<UUID, Integer> loginAttempts = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> authenticated = new ConcurrentHashMap<>();
     private final Map<UUID, String> pendingTwoFactorIp = new ConcurrentHashMap<>();
 
@@ -72,7 +71,6 @@ public final class AuthManager {
      */
     public void authenticate(UUID uuid) {
         authenticated.put(uuid, true);
-        loginAttempts.remove(uuid);
         clearPendingTwoFactor(uuid);
     }
 
@@ -83,35 +81,7 @@ public final class AuthManager {
      */
     public void unauthenticate(UUID uuid) {
         authenticated.remove(uuid);
-        loginAttempts.remove(uuid);
         clearPendingTwoFactor(uuid);
-    }
-
-    /**
-     * Увеличивает счётчик неудачных попыток входа на единицу.
-     *
-     * @param uuid UUID игрока
-     * @return текущее количество неудачных попыток
-     */
-    public int incrementLoginAttempts(UUID uuid) {
-        return loginAttempts.merge(uuid, 1, Integer::sum);
-    }
-
-    /**
-     * Сбрасывает счётчик неудачных попыток входа.
-     *
-     * @param uuid UUID игрока
-     */
-    public void resetLoginAttempts(UUID uuid) {
-        loginAttempts.remove(uuid);
-    }
-
-    /**
-     * @param uuid UUID игрока
-     * @return текущее количество неудачных попыток входа
-     */
-    public int getLoginAttempts(UUID uuid) {
-        return loginAttempts.getOrDefault(uuid, 0);
     }
 
     /**
@@ -119,7 +89,6 @@ public final class AuthManager {
      */
     public void clear() {
         authenticated.clear();
-        loginAttempts.clear();
         pendingTwoFactorIp.clear();
     }
 }

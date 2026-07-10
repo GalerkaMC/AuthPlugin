@@ -13,7 +13,7 @@ import java.util.UUID;
  * Сервис бизнес-логики авторизации.
  * <p>
  * Обрабатывает регистрацию, вход, смену пароля, авто-логин по IP-сессии
- * и удаление аккаунтов. Все операции с паролями выполняются через {@link PasswordHasher}.
+ * и удаление аккаунтов.
  */
 public final class AuthService {
 
@@ -97,31 +97,15 @@ public final class AuthService {
      *
      * @param username        ник игрока
      * @param uuid            UUID игрока
-     * @param password        пароль
-     * @param confirmPassword подтверждение пароля
      * @param ip              IP-адрес игрока для создания сессии
      * @return результат регистрации
      */
     public RegisterResult register(
             String username,
             UUID uuid,
-            String password,
-            String confirmPassword,
             String ip
     ) {
         String normalized = normalizeUsername(username);
-
-        if (!password.equals(confirmPassword)) {
-            return RegisterResult.PASSWORDS_MISMATCH;
-        }
-
-        if (password.length() < config.getMinPasswordLength()) {
-            return RegisterResult.PASSWORD_TOO_SHORT;
-        }
-
-        if (password.length() > config.getMaxPasswordLength()) {
-            return RegisterResult.PASSWORD_TOO_LONG;
-        }
 
         if (isRegistered(uuid)) {
             return RegisterResult.ALREADY_REGISTERED;
@@ -134,7 +118,6 @@ public final class AuthService {
         UserEntity user = new UserEntity(
                 normalized,
                 uuid.toString(),
-                PasswordHasher.hash(password),
                 Instant.now()
         );
         createSession(user, ip);
@@ -145,35 +128,6 @@ public final class AuthService {
         });
 
         return RegisterResult.SUCCESS;
-    }
-
-    /**
-     * Проверяет пароль игрока без создания сессии.
-     * Сессия создаётся отдельно через {@link #finalizeLogin(UUID, String)} после полной авторизации.
-     *
-     * @param username ник игрока
-     * @param uuid     UUID игрока
-     * @param password пароль
-     * @return результат проверки пароля
-     */
-    public LoginResult login(String username, UUID uuid, String password) {
-        Optional<UserEntity> userOptional = findByUsername(username);
-
-        if (userOptional.isEmpty()) {
-            return LoginResult.NOT_REGISTERED;
-        }
-
-        UserEntity user = userOptional.get();
-
-        if (!user.getUuid().equals(uuid.toString())) {
-            return LoginResult.WRONG_ACCOUNT;
-        }
-
-        if (!PasswordHasher.verify(password, user.getPasswordHash())) {
-            return LoginResult.WRONG_PASSWORD;
-        }
-
-        return LoginResult.SUCCESS;
     }
 
     /**
@@ -237,72 +191,6 @@ public final class AuthService {
         UserEntity user = userOptional.get();
         user.setSessionExpiresAt(null);
         saveUser(user);
-    }
-
-    /**
-     * Меняет пароль авторизованного игрока.
-     *
-     * @param uuid            UUID игрока
-     * @param oldPassword     текущий пароль
-     * @param newPassword     новый пароль
-     * @param confirmPassword подтверждение нового пароля
-     * @return результат смены пароля
-     */
-    public ChangePasswordResult changePassword(
-            UUID uuid,
-            String oldPassword,
-            String newPassword,
-            String confirmPassword
-    ) {
-        Optional<UserEntity> userOptional = findByUuid(uuid);
-
-        if (userOptional.isEmpty()) {
-            return ChangePasswordResult.NOT_REGISTERED;
-        }
-
-        if (!newPassword.equals(confirmPassword)) {
-            return ChangePasswordResult.PASSWORDS_MISMATCH;
-        }
-
-        if (newPassword.length() < config.getMinPasswordLength()) {
-            return ChangePasswordResult.PASSWORD_TOO_SHORT;
-        }
-
-        if (newPassword.length() > config.getMaxPasswordLength()) {
-            return ChangePasswordResult.PASSWORD_TOO_LONG;
-        }
-
-        UserEntity user = userOptional.get();
-
-        if (!PasswordHasher.verify(oldPassword, user.getPasswordHash())) {
-            return ChangePasswordResult.WRONG_PASSWORD;
-        }
-
-        user.setPasswordHash(PasswordHasher.hash(newPassword));
-        saveUser(user);
-
-        return ChangePasswordResult.SUCCESS;
-    }
-
-    /**
-     * Удаляет аккаунт игрока по нику.
-     *
-     * @param username ник игрока
-     * @return результат удаления
-     */
-    public UnregisterResult unregister(String username) {
-        Optional<UserEntity> userOptional = findByUsername(username);
-        if (userOptional.isEmpty()) {
-            return UnregisterResult.NOT_FOUND;
-        }
-
-        UserEntity user = userOptional.get();
-        databaseManager.inTransaction(session -> {
-            session.remove(session.contains(user) ? user : session.merge(user));
-            return null;
-        });
-
-        return UnregisterResult.SUCCESS;
     }
 
     /**
@@ -393,47 +281,5 @@ public final class AuthService {
         ALREADY_REGISTERED,
         /** Ник уже занят другим аккаунтом. */
         USERNAME_TAKEN
-    }
-
-    /**
-     * Результат попытки входа в аккаунт.
-     */
-    public enum LoginResult {
-        /** Вход выполнен успешно. */
-        SUCCESS,
-        /** Аккаунт не зарегистрирован. */
-        NOT_REGISTERED,
-        /** Неверный пароль. */
-        WRONG_PASSWORD,
-        /** Аккаунт привязан к другому UUID. */
-        WRONG_ACCOUNT
-    }
-
-    /**
-     * Результат попытки смены пароля.
-     */
-    public enum ChangePasswordResult {
-        /** Пароль успешно изменён. */
-        SUCCESS,
-        /** Аккаунт не зарегистрирован. */
-        NOT_REGISTERED,
-        /** Новый пароль и подтверждение не совпадают. */
-        PASSWORDS_MISMATCH,
-        /** Новый пароль короче минимально допустимой длины. */
-        PASSWORD_TOO_SHORT,
-        /** Новый пароль длиннее максимально допустимой длины. */
-        PASSWORD_TOO_LONG,
-        /** Неверный текущий пароль. */
-        WRONG_PASSWORD
-    }
-
-    /**
-     * Результат попытки удаления аккаунта.
-     */
-    public enum UnregisterResult {
-        /** Аккаунт успешно удалён. */
-        SUCCESS,
-        /** Аккаунт с указанным ником не найден. */
-        NOT_FOUND
     }
 }

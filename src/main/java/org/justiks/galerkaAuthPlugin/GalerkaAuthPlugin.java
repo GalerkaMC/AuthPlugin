@@ -11,11 +11,7 @@ import org.justiks.galerkaAuthPlugin.api.RestApiServer;
 import org.justiks.galerkaAuthPlugin.auth.AuthManager;
 import org.justiks.galerkaAuthPlugin.auth.AuthService;
 import org.justiks.galerkaAuthPlugin.auth.PlayerRestrictionService;
-import org.justiks.galerkaAuthPlugin.command.ChangePasswordCommand;
-import org.justiks.galerkaAuthPlugin.command.LoginCommand;
 import org.justiks.galerkaAuthPlugin.command.LogoutCommand;
-import org.justiks.galerkaAuthPlugin.command.RegisterCommand;
-import org.justiks.galerkaAuthPlugin.command.UnregisterCommand;
 import org.justiks.galerkaAuthPlugin.config.PluginConfig;
 import org.justiks.galerkaAuthPlugin.database.DatabaseManager;
 import org.justiks.galerkaAuthPlugin.listener.AuthListener;
@@ -218,17 +214,8 @@ public final class GalerkaAuthPlugin extends JavaPlugin {
      * Регистрирует все команды плагина в Bukkit.
      */
     private void registerCommands() {
-        RegisterCommand registerCommand = new RegisterCommand(this, authService);
-        LoginCommand loginCommand = new LoginCommand(this, authService, twoFactorService);
-        ChangePasswordCommand changePasswordCommand = new ChangePasswordCommand(this, authService);
         LogoutCommand logoutCommand = new LogoutCommand(this, authService);
-        UnregisterCommand unregisterCommand = new UnregisterCommand(this, authService);
-
-        register("reg", registerCommand);
-        register("login", loginCommand);
-        register("changepassword", changePasswordCommand);
         register("logout", logoutCommand);
-        register("unregister", unregisterCommand);
     }
 
     /**

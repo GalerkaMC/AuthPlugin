@@ -23,9 +23,6 @@ public class UserEntity {
     @Column(name = "uuid", nullable = false, unique = true, length = 36)
     private String uuid;
 
-    @Column(name = "password_hash", nullable = false, length = 72)
-    private String passwordHash;
-
     @Column(name = "registered_at", nullable = false)
     private Instant registeredAt;
 
@@ -52,13 +49,11 @@ public class UserEntity {
      *
      * @param username     нормализованный ник игрока (первичный ключ)
      * @param uuid           UUID игрока в строковом виде
-     * @param passwordHash   BCrypt-хеш пароля
      * @param registeredAt   момент регистрации
      */
-    public UserEntity(String username, String uuid, String passwordHash, Instant registeredAt) {
+    public UserEntity(String username, String uuid, Instant registeredAt) {
         this.username = username;
         this.uuid = uuid;
-        this.passwordHash = passwordHash;
         this.registeredAt = registeredAt;
     }
 
@@ -88,20 +83,6 @@ public class UserEntity {
      */
     public void setUuid(String uuid) {
         this.uuid = uuid;
-    }
-
-    /**
-     * @return BCrypt-хеш пароля
-     */
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    /**
-     * @param passwordHash BCrypt-хеш пароля
-     */
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
     }
 
     /**

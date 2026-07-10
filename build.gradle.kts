@@ -15,7 +15,6 @@ dependencies {
     implementation("org.hibernate.orm:hibernate-core:6.6.4.Final")
     implementation("org.hibernate.orm:hibernate-community-dialects:6.6.4.Final")
     implementation("org.xerial:sqlite-jdbc:3.47.2.0")
-    implementation("at.favre.lib:bcrypt:0.10.2")
 }
 
 java {

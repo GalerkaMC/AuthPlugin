@@ -3,32 +3,14 @@ version: '${version}'
 main: org.justiks.galerkaAuthPlugin.GalerkaAuthPlugin
 api-version: '26.1'
 load: POSTWORLD
-description: Плагин авторизации с SQLite и хешированием паролей
+description: Плагин авторизации с SQLite
 
 commands:
-  reg:
-    description: Регистрация аккаунта
-    usage: /reg <пароль> <повтор пароля>
-    aliases: [register]
-  login:
-    description: Вход в аккаунт
-    usage: /login <пароль>
-    aliases: [l]
-  changepassword:
-    description: Смена пароля
-    usage: /changepassword <старый> <новый> <повтор>
-    aliases: [changepass, cp]
   logout:
     description: Выход из аккаунта
     usage: /logout
-  unregister:
-    description: Удаление аккаунта игрока
-    usage: /unregister <ник>
 
 permissions:
-  galerkaauth.bypass:
-    description: Обход авторизации
-    default: op
   galerkaauth.admin.unregister:
     description: Удаление аккаунтов игроков
     default: op
@@ -36,5 +18,4 @@ permissions:
     description: Все права плагина
     default: op
     children:
-      galerkaauth.bypass: true
       galerkaauth.admin.unregister: true

@@ -75,8 +75,6 @@ public final class AddWhitelistHandler {
         authService.register(
                 nickname,
                 UUID.randomUUID(), // TOOD: remove it
-                "",
-                "",
                 ""
         );
 

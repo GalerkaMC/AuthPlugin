@@ -51,11 +51,6 @@ public final class AuthListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
 
-        if (player.hasPermission("galerkaauth.bypass")) {
-            plugin.completeAuthentication(player);
-            return;
-        }
-
         plugin.requireAuthentication(player);
 
         String ip = PlayerIpResolver.resolve(player);
@@ -75,9 +70,11 @@ public final class AuthListener implements Listener {
                 }
 
                 if (registered) {
-                    player.sendMessage(plugin.getPluginConfig().message("join-login"));
-                } else {
-                    player.sendMessage(plugin.getPluginConfig().message("join-register"));
+                    player.sendMessage(plugin.getPluginConfig().message("two-factor-pending"));
+                    plugin.getTwoFactorService().requestConfirmation(
+                            plugin.getAuthService().findByUsername(player.getName()).get(),
+                            player.getName()
+                    );
                 }
             });
         });
