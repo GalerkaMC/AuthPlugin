@@ -3,7 +3,6 @@ package org.justiks.galerkaAuthPlugin.api;
 import com.sun.net.httpserver.HttpExchange;
 import org.justiks.galerkaAuthPlugin.GalerkaAuthPlugin;
 import org.justiks.galerkaAuthPlugin.auth.AuthService;
-import org.justiks.galerkaAuthPlugin.database.entity.UserEntity;
 import org.justiks.galerkaAuthPlugin.util.JsonUtils;
 
 import java.io.IOException;
@@ -12,14 +11,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
- * Check player in whitelist exists endpoint
+ * Эндпоинт для проверки наличия никнейма в вайтлисте
  */
-public class CheckWhitelistHandler {
-
-    private CheckWhitelistHandler() {
+public class CheckNicknameHandler {
+    private CheckNicknameHandler() {
     }
 
     public static RestEndpointHandler create() {
@@ -45,24 +42,20 @@ public class CheckWhitelistHandler {
             params.put(key, value);
         }
 
-        if (params.get("userId") == null) {
-            HttpResponses.json(exchange, 400, "Missing req param: userId");
+        if (params.get("nickname") == null) {
+            HttpResponses.json(exchange, 400, "Missing req param: nickname");
             return;
         }
 
-        String userId = params.get("userId");
+        String nickname = params.get("nickname");
+        System.out.println(nickname);
 
         AuthService authService = plugin.getAuthService();
-        Optional<UserEntity> userEntity = authService.findByTelegramId(userId);
+        boolean exists = authService.isRegistered(nickname);
 
         // create response
         Map<String, Object> responseMap = new LinkedHashMap<>();
-        if (userEntity.isEmpty()) {
-            responseMap.put("exists", false);
-        }
-        else {
-            responseMap.put("exists", true);
-        }
+        responseMap.put("exists", exists);
 
         HttpResponses.json(
                 exchange,

@@ -27,8 +27,8 @@ public final class AddWhitelistHandler {
      * @param nickname minecraft nickname
      */
     private record WhitelistAddRequestBody(
-            OptionalLong userId,
-            Optional<String> nickname
+            long userId,
+            String nickname
     ) {
     }
 
@@ -48,18 +48,13 @@ public final class AddWhitelistHandler {
                 requestString,
                 WhitelistAddRequestBody.class);
 
-        if (whitelistAddRequestBody.userId.isEmpty()) {
-            HttpResponses.badRequest(exchange, "Missing required field: userId");
-            return;
-        }
-
         if (whitelistAddRequestBody.nickname.isEmpty()) {
             HttpResponses.badRequest(exchange, "Missing required field: nickname");
             return;
         }
 
-        long userId = whitelistAddRequestBody.userId.getAsLong();
-        String nickname = whitelistAddRequestBody.nickname.get();
+        long userId = whitelistAddRequestBody.userId;
+        String nickname = whitelistAddRequestBody.nickname;
 
 
         // add player to database

@@ -27,6 +27,7 @@ public final class RestApiEndpoints {
         router.register("POST", "/api/v1/2fa/confirm/", TwoFactorConfirmHandler.create());
         router.register("POST", "/api/v1/whitelist/add/", AddWhitelistHandler.create());
         router.register("GET", "/api/v1/whitelist/exists/", CheckWhitelistHandler.create());
+        router.register("GET", "/api/v1/whitelist/exists_by_nickname/", CheckNicknameHandler.create());
     }
 
     /**
