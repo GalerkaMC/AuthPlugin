@@ -188,7 +188,8 @@ public final class AuthService {
         if (!config.isRequireSameIpForSession()) {
             return true;
         }
-
+        System.out.println(user.getLastIp());
+        System.out.println(ip);
         return ip != null && ip.equals(user.getLastIp());
     }
 

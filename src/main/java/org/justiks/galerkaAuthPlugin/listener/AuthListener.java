@@ -97,11 +97,12 @@ public class AuthListener implements Listener {
     private void beginAuthentication(final PlayerConfigurationConnection connection, final Thread thread) {
         threadsMap.put(connection.getProfile().getName(), thread);
 
-        String ip = connection.getAddress().toString();
+        String ip = connection.getClientAddress().getHostString();
         boolean autoLoggedIn = plugin.getAuthService().tryAutoLogin(connection.getProfile().getName(), ip);
 
         if (autoLoggedIn) {
             authenticationSuccess(connection);
+            thread.interrupt();
             return;
         }
 
@@ -117,6 +118,7 @@ public class AuthListener implements Listener {
 
     private void authenticationSuccess(final PlayerConfigurationConnection connection) {
         threadsMap.remove(connection.getProfile().getName());
+        plugin.getAuthService().finalizeLogin(connection.getProfile().getName(), connection.getClientAddress().getHostString());
     }
 
     private void authenticationFailure(final PlayerConfigurationConnection connection) {
